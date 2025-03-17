@@ -1,0 +1,9 @@
+🏋️‍♂️ Menú de Actividades 🏋️‍♂️
+Este es el menú principal. Elige una opción:
+
+1️⃣ - Consultar actividad física diaria 🏃‍♂️
+2️⃣ - Ver plan de estudio 📚
+3️⃣ - Ver progreso 📊
+0️⃣ - Salir del menú 🚪
+
+Escribe el número de la opción que deseas:
