@@ -1,10 +1,12 @@
 const { createBot, createProvider, createFlow, addKeyword, EVENTS } = require('@bot-whatsapp/bot')
-
+require("dotenv").config()
 const QRPortalWeb = require('@bot-whatsapp/portal')
 const BaileysProvider = require('@bot-whatsapp/provider/baileys')
 const MockAdapter = require('@bot-whatsapp/database/mock')
 const path = require("path")
 const fs = require("fs")
+
+const chat = require('./chatGPT')
 
 const menuPath = path.join(__dirname, "mensajes", "menu.txt")
 const menu = fs.readFileSync(menuPath, "utf8")
@@ -16,6 +18,19 @@ const flowWelcome = addKeyword([EVENTS.WELCOME])
     .addAnswer(bienvenida, {
         delay: 2000
     })
+
+const flowFraseAleatoria = addKeyword('frase')
+    .addAnswer('✨ Para generar tu frase inspiradora, ¡escribe cualquier palabra! ✨', {
+        capture: true
+    },
+        async (ctx, ctxFn) => {
+            const prompt = "Crea una frase inspiradora corta y precisa. Agregale emojis. Utiliza la siguiente palabra o palabras"
+            const consulta = ctx.body
+            const answer = await chat(prompt, consulta)
+            console.log(answer.content) // error 429
+            // await ctxFn.flowDynamic(answer.content) //si hay credito en chat gpt :c
+        }
+    )
 
 const flowActividadFisica = addKeyword(EVENTS.ACTION)
     .addAnswer('¡Aquí tienes tu plan de actividad física! 💪')
@@ -48,7 +63,7 @@ const menuFlow = addKeyword(['menu', "Menu"]).addAnswer(
                 return gotoFlow(flowProgreso);
             case "0":
                 return await flowDynamic(
-                    "Saliendo... 👋 \n Escribe Menu para volver aquí. 😉"
+                    "¡Nos vemos! 👋"
                 );
         }
     }
@@ -61,7 +76,7 @@ const salirFlow = addKeyword(['salir', 'chau', 'nv'])
 
 const main = async () => {
     const adapterDB = new MockAdapter()
-    const adapterFlow = createFlow([flowWelcome, menuFlow, salirFlow, flowActividadFisica, flowPlanEstudio, flowProgreso])
+    const adapterFlow = createFlow([flowWelcome, menuFlow, salirFlow, flowActividadFisica, flowPlanEstudio, flowProgreso, flowFraseAleatoria])
     const adapterProvider = createProvider(BaileysProvider)
 
     createBot({
