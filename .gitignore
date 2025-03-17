@@ -1,2 +1,7 @@
 base-baileys-memory/node_modules
 base-baileys-memory/.env
+base-baileys-memory/bot_sessions
+base-baileys-memory/baileys.log
+base-baileys-memory/bot.qr.png
+base-baileys-memory/core.class.log
+base-baileys-memory/queue.class.log
