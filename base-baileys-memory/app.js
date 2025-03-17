@@ -8,6 +8,17 @@ const fs = require("fs")
 
 const chat = require('./chatGPT')
 
+const { handlerAI } = require("./whisper")
+
+const flowVoice = addKeyword(EVENTS.VOICE_NOTE).addAnswer('Nota de voz recibida 🎤', null, async (ctx, ctxFn) => {
+    const text = await handlerAI(ctx)
+    const prompt = "Responde de manera clara y concisa utilizando emojis."
+    const consulta = text
+    const answer = await chat(prompt, consulta)
+    // await ctxFn.flowDynamic(answer.content) // si hay credito
+    console.log(text) // error 429 - falta de credito chatGPT
+})
+
 const menuPath = path.join(__dirname, "mensajes", "menu.txt")
 const menu = fs.readFileSync(menuPath, "utf8")
 
@@ -27,8 +38,8 @@ const flowFraseAleatoria = addKeyword('frase')
             const prompt = "Crea una frase inspiradora corta y precisa. Agregale emojis. Utiliza la siguiente palabra o palabras"
             const consulta = ctx.body
             const answer = await chat(prompt, consulta)
-            console.log(answer.content) // error 429
-            // await ctxFn.flowDynamic(answer.content) //si hay credito en chat gpt :c
+            console.log(answer.content) // error 429 - falta de credito chatGPT
+            // await ctxFn.flowDynamic(answer.content) // si hay credito
         }
     )
 
@@ -76,7 +87,7 @@ const salirFlow = addKeyword(['salir', 'chau', 'nv'])
 
 const main = async () => {
     const adapterDB = new MockAdapter()
-    const adapterFlow = createFlow([flowWelcome, menuFlow, salirFlow, flowActividadFisica, flowPlanEstudio, flowProgreso, flowFraseAleatoria])
+    const adapterFlow = createFlow([flowWelcome, menuFlow, salirFlow, flowActividadFisica, flowPlanEstudio, flowProgreso, flowFraseAleatoria, flowVoice])
     const adapterProvider = createProvider(BaileysProvider)
 
     createBot({
