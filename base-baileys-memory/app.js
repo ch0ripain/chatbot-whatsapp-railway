@@ -2,7 +2,8 @@ const { createBot, createProvider, createFlow, addKeyword, EVENTS } = require('@
 require("dotenv").config()
 const QRPortalWeb = require('@bot-whatsapp/portal')
 const BaileysProvider = require('@bot-whatsapp/provider/baileys')
-const MockAdapter = require('@bot-whatsapp/database/mock')
+// const MockAdapter = require('@bot-whatsapp/database/mock')
+const MongoAdapter = require('@bot-whatsapp/database/mongo')
 const path = require("path")
 const fs = require("fs")
 
@@ -86,7 +87,10 @@ const salirFlow = addKeyword(['salir', 'chau', 'nv'])
     .addAnswer('¡Nos vemos! 👋')
 
 const main = async () => {
-    const adapterDB = new MockAdapter()
+    const adapterDB = new MongoAdapter({
+        dbUri: process.env.MONGO_DB_URI,
+        dbName: "MaruBot"
+    })
     const adapterFlow = createFlow([flowWelcome, menuFlow, salirFlow, flowActividadFisica, flowPlanEstudio, flowProgreso, flowFraseAleatoria, flowVoice])
     const adapterProvider = createProvider(BaileysProvider)
 
