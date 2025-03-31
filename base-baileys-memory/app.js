@@ -1,89 +1,83 @@
-const { createBot, createProvider, createFlow, addKeyword, EVENTS } = require('@bot-whatsapp/bot')
-require("dotenv").config()
-const QRPortalWeb = require('@bot-whatsapp/portal')
-const BaileysProvider = require('@bot-whatsapp/provider/baileys')
+// const { createBot, createProvider, createFlow, addKeyword, EVENTS } = require('@bot-whatsapp/bot')
+import pkg from '@bot-whatsapp/bot'
+const { createBot, createProvider, createFlow, addKeyword, EVENTS } = pkg
+// require("dotenv").config()
+import dotenv from 'dotenv'
+dotenv.config()
+// const QRPortalWeb = require('@bot-whatsapp/portal')
+import QRPortalWeb from '@bot-whatsapp/portal'
+// const BaileysProvider = require('@bot-whatsapp/provider/baileys')
+import BaileysProvider from '@bot-whatsapp/provider/baileys'
 // const MockAdapter = require('@bot-whatsapp/database/mock')
-const MongoAdapter = require('@bot-whatsapp/database/mongo')
-const path = require("path")
-const fs = require("fs")
+// const MongoAdapter = require('@bot-whatsapp/database/mongo')
+import MongoAdapter from '@bot-whatsapp/database/mongo'
+// const path = require("path")
+import path from "path"
+// const fs = require("fs")
+import fs from "fs"
 
-const chat = require('./chatGPT')
+import { llama } from './ollama.js'
+import { delay } from '@adiwajshing/baileys'
 
-const { handlerAI } = require("./whisper")
-
-const flowVoice = addKeyword(EVENTS.VOICE_NOTE).addAnswer('Nota de voz recibida 🎤', null, async (ctx, ctxFn) => {
-    const text = await handlerAI(ctx)
-    const prompt = "Responde de manera clara y concisa utilizando emojis."
-    const consulta = text
-    const answer = await chat(prompt, consulta)
-    // await ctxFn.flowDynamic(answer.content) // si hay credito
-    console.log(text) // error 429 - falta de credito chatGPT
-})
-
-const menuPath = path.join(__dirname, "mensajes", "menu.txt")
-const menu = fs.readFileSync(menuPath, "utf8")
+const __dirname = import.meta.dirname
 
 const bienvenidaPath = path.join(__dirname, "mensajes", "bienvenida.txt")
 const bienvenida = fs.readFileSync(bienvenidaPath, "utf8")
 
+const bienvenidaMenuPath = path.join(__dirname, "mensajes", "bienvenida-menu.txt")
+const bienvenidaMenu = fs.readFileSync(bienvenidaMenuPath, "utf-8")
+
 const flowWelcome = addKeyword([EVENTS.WELCOME])
     .addAnswer(bienvenida, {
-        delay: 2000
+        delay: 1000
+    })
+    .addAnswer('Escribe *Menú* 📜 para ver todas las opciones disponibles.', {
+        delay: 1500
     })
 
+const flowMenu = addKeyword(['menu', 'menú', 'Menú'])
+    .addAnswer(bienvenidaMenu)
+
+const flowEvento = addKeyword('evento')
+    .addAnswer('Esta función todavía no está disponible ⏳')
+
+const flowProgreso = addKeyword('progreso')
+    .addAnswer('Esta función todavía no está disponible ⏳')
+
 const flowFraseAleatoria = addKeyword('frase')
-    .addAnswer('✨ Para generar tu frase inspiradora, ¡escribe cualquier palabra! ✨', {
+    .addAnswer('Dame una palabra para generar tu frase aleatoria ✨', {
         capture: true
     },
         async (ctx, ctxFn) => {
-            const prompt = "Crea una frase inspiradora corta y precisa. Agregale emojis. Utiliza la siguiente palabra o palabras"
-            const consulta = ctx.body
-            const answer = await chat(prompt, consulta)
-            console.log(answer.content) // error 429 - falta de credito chatGPT
-            // await ctxFn.flowDynamic(answer.content) // si hay credito
+            const prompt = `Crea una frase inspiradora, corta y precisa. Agregale emojis. Utiliza la siguiente palabra o palabras => ${ctx.body}`
+            const respuesta = await llama(prompt)
+            await ctxFn.flowDynamic(respuesta)
         }
     )
 
-const flowActividadFisica = addKeyword(EVENTS.ACTION)
-    .addAnswer('¡Aquí tienes tu plan de actividad física! 💪')
-    .addAnswer('https://drive.google.com/file/d/1xNDEiCam-dkLis0bK_9iWdgY1dGH52oW/view?usp=sharing')
-
-const flowPlanEstudio = addKeyword(EVENTS.ACTION)
-    .addAnswer('¡Aquí tienes el enlace para acceder al plan! 📚')
-    .addAnswer('https://www.notion.com/es')
-
-const flowProgreso = addKeyword(EVENTS.ACTION)
-    .addAnswer('¡Aquí tienes una imagen que describe el progreso de ambos! 😜🎯🔥', {
-        media: 'https://i.pinimg.com/736x/c8/f9/b9/c8f9b9f72226fcadd1dd9079f22f6ab9.jpg'
-    })
-
-const menuFlow = addKeyword(['menu', "Menu"]).addAnswer(
-    menu,
-    { capture: true },
-    async (ctx, { gotoFlow, fallBack, flowDynamic }) => {
-        if (!["1", "2", "3", "0"].includes(ctx.body)) {
-            return fallBack(
-                "¡Ups! 🚫 Esa no es una opción válida. Por favor, elige una de las opciones disponibles. 😊"
-            );
+const flowDatoCurioso = addKeyword('dato')
+    .addAnswer('Escribeme sobre qué te gustaría saber? 🤔', {
+        capture: true
+    },
+        async (ctx, ctxFn) => {
+            const prompt = `Dime un dato curioso, se breve, coherente y cohesivo, no más de 40 palabras. Dame solo la respuesta. Agrega emojis necesarios. Tiene que ser un dato curioso sobre el siguiente topico: ${ctx.body}`
+            const respuesta = await llama(prompt)
+            await ctxFn.flowDynamic(respuesta)
         }
-        switch (ctx.body) {
-            case "1":
-                return gotoFlow(flowActividadFisica);
-            case "2":
-                return gotoFlow(flowPlanEstudio);
-            case "3":
-                return gotoFlow(flowProgreso);
-            case "0":
-                return await flowDynamic(
-                    "¡Nos vemos! 👋"
-                );
+    )
+
+const flowPregunta = addKeyword('pregunta')
+    .addAnswer('Preguntamé lo que quieras 🤖', {
+        capture: true
+    },
+        async (ctx, ctxFn) => {
+            const prompt = `Responde a la siguiente pregunta: => ${ctx.body}. Se breve y conciso, agrega emojis, no más de 40 palabras.`
+            const respuesta = await llama(prompt)
+            await ctxFn.flowDynamic(respuesta)
         }
-    }
-);
+    )
 
-
-
-const salirFlow = addKeyword(['salir', 'chau', 'nv'])
+const flowSalir = addKeyword(['salir', 'chau', 'nv', 'gracias'])
     .addAnswer('¡Nos vemos! 👋')
 
 const main = async () => {
@@ -91,7 +85,7 @@ const main = async () => {
         dbUri: process.env.MONGO_DB_URI,
         dbName: "MaruBot"
     })
-    const adapterFlow = createFlow([flowWelcome, menuFlow, salirFlow, flowActividadFisica, flowPlanEstudio, flowProgreso, flowFraseAleatoria, flowVoice])
+    const adapterFlow = createFlow([flowWelcome, flowMenu, flowEvento, flowProgreso, flowFraseAleatoria, flowDatoCurioso, flowPregunta, flowSalir,])
     const adapterProvider = createProvider(BaileysProvider)
 
     createBot({
