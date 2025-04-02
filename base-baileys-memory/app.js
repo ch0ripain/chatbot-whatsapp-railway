@@ -18,6 +18,7 @@ import fs from "fs"
 
 import { llama } from './ollama.js'
 import { delay } from '@adiwajshing/baileys'
+import { generarImagen } from './lcm-lora.js'
 
 const __dirname = import.meta.dirname
 
@@ -66,6 +67,32 @@ const flowDatoCurioso = addKeyword('dato')
         }
     )
 
+const flowImagen = addKeyword('imagen')
+    .addAnswer('Describe la imagen que quieres generar 🖼️', {
+        capture: true
+    },
+        async (ctx, { flowDynamic }) => {
+            await flowDynamic('Tu imagen se esta generando (30s⏳)')
+            const mensaje = await generarImagen(ctx.body)
+            if (mensaje.includes('Ups')) {
+                await flowDynamic([
+                    {
+                        body: mensaje,
+                        delay: 1000
+                    }
+                ])
+            } else {
+                await flowDynamic([
+                    {
+                        body: mensaje,
+                        media: 'C:/Users/Leo/Desktop/Personal Projects/WppChatbotRailway/base-baileys-memory/images/image.png',
+                        delay: 1000
+                    }
+                ])
+
+            }
+        })
+
 const flowPregunta = addKeyword('pregunta')
     .addAnswer('Preguntamé lo que quieras 🤖', {
         capture: true
@@ -85,7 +112,7 @@ const main = async () => {
         dbUri: process.env.MONGO_DB_URI,
         dbName: "MaruBot"
     })
-    const adapterFlow = createFlow([flowWelcome, flowMenu, flowEvento, flowProgreso, flowFraseAleatoria, flowDatoCurioso, flowPregunta, flowSalir,])
+    const adapterFlow = createFlow([flowWelcome, flowMenu, flowEvento, flowProgreso, flowFraseAleatoria, flowDatoCurioso, flowImagen, flowPregunta, flowSalir,])
     const adapterProvider = createProvider(BaileysProvider)
 
     createBot({
