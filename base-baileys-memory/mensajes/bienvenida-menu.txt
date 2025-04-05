@@ -5,4 +5,5 @@ Escribe la palabra *clave* 🔑 de la función que quieras usar:
 💡 Frase → Te diré una frase aleatoria
 🤓 Dato → Te compartiré un dato curioso
 🖼️ Imagen → Generaré una imagen a partir de un texto
-❓ Pregunta → Responderé cualquier duda que tengas (💬/🔊)
+
+Recuerda que puedes mandarme audios 🔊. Responderé cualquier consulta que tengas 🤖

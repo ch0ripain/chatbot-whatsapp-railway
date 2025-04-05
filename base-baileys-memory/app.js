@@ -19,6 +19,7 @@ import fs from "fs"
 import { llama } from './ollama.js'
 import { delay } from '@adiwajshing/baileys'
 import { generarImagen } from './lcm-lora.js'
+import { assemblyAI } from './assembly-ai.js'
 
 const __dirname = import.meta.dirname
 
@@ -32,9 +33,7 @@ const flowWelcome = addKeyword([EVENTS.WELCOME])
     .addAnswer(bienvenida, {
         delay: 1000
     })
-    .addAnswer('Escribe *Menú* 📜 para ver todas las opciones disponibles.', {
-        delay: 1500
-    })
+    .addAnswer('Escribe *Menú* 📜 para ver todas las opciones disponibles.')
 
 const flowMenu = addKeyword(['menu', 'menú', 'Menú'])
     .addAnswer(bienvenidaMenu)
@@ -93,16 +92,19 @@ const flowImagen = addKeyword('imagen')
             }
         })
 
-const flowPregunta = addKeyword('pregunta')
-    .addAnswer('Preguntamé lo que quieras 🤖', {
-        capture: true
-    },
-        async (ctx, ctxFn) => {
-            const prompt = `Responde a la siguiente pregunta: => ${ctx.body}. Se breve y conciso, agrega emojis, no más de 40 palabras.`
-            const respuesta = await llama(prompt)
-            await ctxFn.flowDynamic(respuesta)
+const flowAudio = addKeyword(EVENTS.VOICE_NOTE)
+    .addAnswer('Estamos procesando tu nota de voz 🤠')
+    .addAnswer('Espera unos segundos ⏳', {
+        delay: 1000
+    }, async (ctx, { flowDynamic }) => {
+        const transcripcion = await assemblyAI(ctx)
+        if (transcripcion.text.includes('Ups... algo salió mal.')) {
+            return await flowDynamic(transcripcion.text)
         }
-    )
+        const prompt = `Responde a la siguiente pregunta: => ${transcripcion.text}. Se breve y conciso, agrega emojis, no más de 40 palabras. Despidete al final con algo como "Si tienes mas preguntas, no dudes en hacerlas, nos vemos ${ctx.pushName}". Puedes mejorar la despedida del final como tu quieras.`
+        const respuesta = await llama(prompt)
+        await flowDynamic(respuesta)
+    })
 
 const flowSalir = addKeyword(['salir', 'chau', 'nv', 'gracias'])
     .addAnswer('¡Nos vemos! 👋')
@@ -112,7 +114,7 @@ const main = async () => {
         dbUri: process.env.MONGO_DB_URI,
         dbName: "MaruBot"
     })
-    const adapterFlow = createFlow([flowWelcome, flowMenu, flowEvento, flowProgreso, flowFraseAleatoria, flowDatoCurioso, flowImagen, flowPregunta, flowSalir,])
+    const adapterFlow = createFlow([flowWelcome, flowMenu, flowEvento, flowProgreso, flowFraseAleatoria, flowDatoCurioso, flowImagen, flowAudio, flowSalir,])
     const adapterProvider = createProvider(BaileysProvider)
 
     createBot({
