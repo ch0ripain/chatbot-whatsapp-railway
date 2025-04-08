@@ -17,6 +17,7 @@
     "@bot-whatsapp/database": "latest",
     "@bot-whatsapp/portal": "latest",
     "@bot-whatsapp/provider": "latest",
+    "@huggingface/inference": "^3.7.0",
     "@whiskeysockets/baileys": "6.5.0",
     "assemblyai": "^4.9.0",
     "cache-manager": "5.2.4",

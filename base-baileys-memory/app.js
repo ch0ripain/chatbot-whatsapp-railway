@@ -20,6 +20,7 @@ import { llama } from './ollama.js'
 import { delay } from '@adiwajshing/baileys'
 import { generarImagen } from './lcm-lora.js'
 import { assemblyAI } from './assembly-ai.js'
+import { huggingFace } from './huggingface.js'
 
 const __dirname = import.meta.dirname
 
@@ -168,6 +169,37 @@ const flowAudio = addKeyword(EVENTS.VOICE_NOTE)
         }
     })
 
+const flowDescribirImagen = addKeyword('describir')
+    .addAction(async (ctx, ctxFn) => {
+        const isMessageFromGroup = !!ctx.message.extendedTextMessage
+        if (isMessageFromGroup) {
+            await ctxFn.provider.sendText(process.env.WHATSAPP_GROUP_ID, 'Por el momento, la descripción de imagen solo funciona por privado 😞')
+            await ctxFn.flowDynamic('Intenta por acá 🤠')
+            return
+        } else {
+            return await ctxFn.gotoFlow(flowImagenATexto)
+        }
+    })
+
+const flowImagenATexto = addKeyword(EVENTS.ACTION)
+    .addAnswer('Envíame la imagen que queres que te describa 🤠', { capture: true }, async (ctx, ctxFn) => {
+        const isMessageFromGroup = !!ctx.message.extendedTextMessage
+        if (!isMessageFromGroup && ctx.message.imageMessage) {
+            await ctxFn.flowDynamic('Espera unos segundos ⏳')
+            const descripcion = await huggingFace(ctx)
+            if (descripcion.generated_text.includes('Ups... algo salió mal')) {
+                return await ctxFn.flowDynamic(descripcion.generated_text)
+            } else {
+                const prompt = `Traduce el siguiente texto al español, cambialo para que tenga sentido, coherencia y cohesion, ademas agregale emojis acordes al final de cada oración. El texto es el siguiente: "${descripcion.generated_text}". Por favor, enviame unicamente la traduccion o respuesta final sin las comillas "" (obligatorio)`
+                const respuesta = await llama(prompt)
+                return await ctxFn.flowDynamic(respuesta)
+            }
+        } else {
+            await ctxFn.flowDynamic('Por favor, manda una imagen válida 🤠')
+            await ctxFn.gotoFlow(flowImagenATexto)
+        }
+    })
+
 const flowSalir = addKeyword(['salir', 'chau', 'nv', 'gracias'])
     .addAction(async (ctx, ctxFn) => {
         const isMessageFromGroup = !!ctx.message.extendedTextMessage
@@ -184,7 +216,7 @@ const main = async () => {
         dbUri: process.env.MONGO_DB_URI,
         dbName: "MaruBot"
     })
-    const adapterFlow = createFlow([flowWelcome, flowMenu, flowEvento, flowProgreso, flowFraseAleatoria, flowDatoCurioso, flowImagen, flowAudio, flowSalir,])
+    const adapterFlow = createFlow([flowWelcome, flowMenu, flowEvento, flowProgreso, flowFraseAleatoria, flowDatoCurioso, flowImagen, flowAudio, flowDescribirImagen, flowImagenATexto, flowSalir,])
     const adapterProvider = createProvider(BaileysProvider)
 
     createBot({
