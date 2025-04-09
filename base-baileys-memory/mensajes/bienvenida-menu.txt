@@ -1,7 +1,6 @@
 Escribe la palabra *clave* 🔑 de la función que quieras usar:
 
-📅 Evento → Te recordaré una fecha importante
-📊 Progreso → Te ayudaré a trackear tus hábitos
+📊 Tracker → Te ayudaré a recordar tus actividades diarias
 💡 Frase → Te diré una frase aleatoria
 🤓 Dato → Te compartiré un dato curioso
 🖼️ Imagen → Generaré una imagen a partir de un texto

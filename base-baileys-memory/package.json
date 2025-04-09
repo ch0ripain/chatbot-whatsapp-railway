@@ -22,6 +22,7 @@
     "assemblyai": "^4.9.0",
     "cache-manager": "5.2.4",
     "convert-base64-to-image": "^0.0.16",
+    "googleapis": "^148.0.0",
     "mongodb": "^6.14.2",
     "ollama": "^0.5.14",
     "openai": "^3.3.0",
