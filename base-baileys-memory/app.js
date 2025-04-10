@@ -21,7 +21,7 @@ import { delay } from '@adiwajshing/baileys'
 import { generarImagen } from './lcm-lora.js'
 import { assemblyAI } from './assembly-ai.js'
 import { huggingFace } from './huggingface.js'
-import { appendToSheet, readSheet } from './google-sheets.js'
+import { appendToSheet, readSheet, editSheetCellsByIds, deleteSheetRowById } from './google-sheets.js'
 
 const __dirname = import.meta.dirname
 
@@ -57,7 +57,7 @@ const flowTracker = addKeyword('tracker')
     .addAction(async (ctx, ctxFn) => {
         const isMessageFromGroup = !!ctx.message.extendedTextMessage
         if (isMessageFromGroup) {
-            await ctxFn.provider.sendText(process.env.WHATSAPP_GROUP_ID, 'Por el momento, solo se pueden registrar datos por privado 😞')
+            await ctxFn.provider.sendText(process.env.WHATSAPP_GROUP_ID, 'Por el momento, solo se pueden registrar actividades por privado 😞')
             await ctxFn.provider.sendText(process.env.WHATSAPP_GROUP_ID, 'Recuerda que puedes consultar las actividades con *Track* 🧠📲')
             await ctxFn.flowDynamic('Intenta por acá 🤠')
             return
@@ -68,11 +68,19 @@ const flowTracker = addKeyword('tracker')
 
 const flowTrackerRegistro = addKeyword(EVENTS.ACTION)
     .addAnswer('Dame una descripción breve de la actividad que quieras guardar 📝', { capture: true }, async (ctx, ctxFn) => {
-        await ctxFn.state.update({ nombre: ctx.pushName, descripcion: ctx.body, estado: 'Pendiente 🟡' })
+        await ctxFn.state.update({ nombre: ctx.pushName, descripcion: ctx.body, estado: '🟡' })
     })
-    .addAnswer('¿Cuál es la fecha límite para completarlo? 📅⏳', { capture: true }, async (ctx, ctxFn) => {
-        await ctxFn.state.update({ fecha: ctx.body })
-    })
+    .addAnswer(
+        [
+            '¿Cuál es la fecha límite para completarlo? 📅⏳\n',
+            '👉 Ej: "30 de abril", "15 mayo", "01/06"'
+        ],
+        { capture: true },
+        async (ctx, { state, fallBack, flowDynamic }) => {
+            const fecha = ctx.body.trim()
+            await state.update({ fecha })
+        }
+    )
     .addAction(async (ctx, ctxFn) => {
         const nombre = ctxFn.state.get("nombre")
         const descripcion = ctxFn.state.get("descripcion")
@@ -83,14 +91,129 @@ const flowTrackerRegistro = addKeyword(EVENTS.ACTION)
 
         if (!respuesta || respuesta.statusText !== 'OK') {
             await ctxFn.flowDynamic('Ups… algo salió mal. Intenta de nuevo más tarde! ⏳')
+        } else {
+            await ctxFn.state.clear()
         }
     })
     .addAnswer(['Actividad registrada ✅'])
     .addAnswer(['Recuerda que puedes consultar las actividades con *Track* 🧠📲'])
 
+const flowTrackerCompletar = addKeyword('Completar')
+    .addAction(async (ctx, ctxFn) => {
+        const isMessageFromGroup = !!ctx.message.extendedTextMessage
+
+        if (isMessageFromGroup) {
+            await ctxFn.provider.sendText(process.env.WHATSAPP_GROUP_ID, 'Por el momento, solo se pueden completar actividades por privado 😞')
+        } else {
+            return await ctxFn.gotoFlow(flowTrackerCompletarActividad)
+        }
+    })
+
+const flowTrackerCompletarActividad = addKeyword(EVENTS.ACTION)
+    .addAnswer(`Escribe los 🆔 que quieras marcar como completados ✅`)
+    .addAnswer([`👉 Ej: Z4, P2 y C2`, `👉 Ej: z4,p2 y C2`, `👉 Ej: Z4 P2 C2`])
+    .addAction({ capture: true }, async (ctx, ctxFn) => {
+        const codigosSinFormatear = ctx.body
+
+        // Extraer todos los códigos con formato letra+numero, sin importar separadores
+        const codigosFormateados = codigosSinFormatear
+            .toUpperCase()
+            .match(/[A-Z]\d+/g) || []
+
+        await ctxFn.state.update({ codigosDetectados: codigosFormateados })
+
+        await ctxFn.flowDynamic([
+            `🆔 detectados: ${codigosFormateados.join(', ')}`,
+            `Son correctos? (Sí/No) 🤔`
+        ])
+    })
+    .addAction({ capture: true }, async (ctx, ctxFn) => {
+        const respuesta = ctx.body.trim().toLowerCase()
+        const esConfirmacion = ['si', 'sí', 's'].includes(respuesta)
+        const esNegacion = ['no', 'n'].includes(respuesta)
+
+        if (esConfirmacion) {
+            const codigosConfirmados = ctxFn.state.get('codigosDetectados')
+            await ctxFn.flowDynamic(`✅ Trabajando con los siguientes códigos: ${codigosConfirmados.join(', ')} `)
+            const resultado = await editSheetCellsByIds(codigosConfirmados)
+            if (resultado.ok) {
+                await ctxFn.flowDynamic(`✅ Se actualizaron ${resultado.cantidad} actividades.`)
+            } else {
+                await ctxFn.flowDynamic('❌ Hubo un error al actualizar las actividades. Intenta más tarde.')
+            }
+
+        } else if (esNegacion) {
+            await ctxFn.flowDynamic('Vamos de nuevo entonces 🔁')
+            return ctxFn.gotoFlow(flowTrackerCompletarActividad)
+        } else {
+            await ctxFn.flowDynamic('No entendí tu respuesta 🤔 Por favor escribí "sí" o "no"')
+            return ctxFn.gotoFlow(flowTrackerCompletarActividad)
+        }
+    })
+
+const flowTrackerEliminar = addKeyword('Eliminar')
+    .addAction(async (ctx, ctxFn) => {
+        const isMessageFromGroup = !!ctx.message.extendedTextMessage
+        await ctxFn.globalState.update({ usuarioActivo: ctx.pushName })
+        if (isMessageFromGroup) {
+            await ctxFn.provider.sendText(process.env.WHATSAPP_GROUP_ID, 'Por el momento, solo se pueden eliminar actividades por privado 😞')
+        } else {
+            return await ctxFn.gotoFlow(flowTrackerEliminarActividad)
+        }
+    })
+
+const flowTrackerEliminarActividad = addKeyword(EVENTS.ACTION)
+    .addAnswer('Escribe el 🆔 que quieres eliminar 🗑️', { capture: true }, async (ctx, ctxFn) => {
+        const codigosFormateados = ctx.body
+            .toUpperCase()
+            .match(/[A-Z]\d+/g) || []
+
+        if (codigosFormateados.length !== 1) {
+            await ctxFn.flowDynamic([
+                '❌ Solo se puede eliminar una actividad a la vez.',
+                'Por favor, escribí un único ID como por ejemplo: L1, E3, O0'
+            ])
+            return ctxFn.fallBack()
+        }
+
+        const codigo = codigosFormateados[0]
+        await ctxFn.state.update({ codigoDetectado: codigo })
+
+        await ctxFn.flowDynamic([
+            `🆔 detectado: ${codigo}`,
+            `¿Seguro que querés eliminar esta actividad? (Sí/No) ❌`
+        ])
+    })
+    .addAction({ capture: true }, async (ctx, ctxFn) => {
+        const respuesta = ctx.body.trim().toLowerCase()
+        const esConfirmacion = ['si', 'sí', 's'].includes(respuesta)
+        const esNegacion = ['no', 'n'].includes(respuesta)
+
+        if (esConfirmacion) {
+            const codigo = ctxFn.state.get('codigoDetectado')
+            await ctxFn.flowDynamic(`🗑️ Eliminando actividad con ID: ${codigo}`)
+            const nombre = ctxFn.globalState.get('usuarioActivo')
+            const resultado = await deleteSheetRowById(codigo, nombre)
+            if (resultado.ok) {
+                await ctxFn.flowDynamic(`✅ Se eliminó la actividad correctamente.`)
+            } else {
+                await ctxFn.flowDynamic(`❌ No se pudo eliminar. Motivo: ${resultado.error || 'desconocido'}`)
+            }
+
+        } else if (esNegacion) {
+            await ctxFn.flowDynamic('Cancelado. No se eliminó nada ✅')
+        } else {
+            await ctxFn.flowDynamic('No entendí tu respuesta 🤔 Por favor escribí "sí" o "no"')
+            return ctxFn.gotoFlow(flowTrackerEliminarActividad)
+        }
+    })
+
+
+
+
 const flowTrackerVer = addKeyword('track')
     .addAction(async (ctx, ctxFn) => {
-        const mensajeInicial = 'Consultando actividades pendientes... 🧠'
+        const mensajeInicial = 'Consultando actividades... 🧠'
         const isMessageFromGroup = !!ctx.message.extendedTextMessage
 
         if (isMessageFromGroup) {
@@ -99,10 +222,10 @@ const flowTrackerVer = addKeyword('track')
             await ctxFn.flowDynamic(mensajeInicial)
         }
 
-        const datos = await readSheet("Rutatina!A2:D")
+        const datos = await readSheet("Rutatina!A2:F")
 
         if (!datos || datos.length === 0) {
-            const mensajeError = 'Todavía no hay datos registrados 😔'
+            const mensajeError = 'Todavía no hay actividades registradas 😔'
             if (isMessageFromGroup) {
                 return await ctxFn.provider.sendText(process.env.WHATSAPP_GROUP_ID, mensajeError)
             } else {
@@ -112,24 +235,55 @@ const flowTrackerVer = addKeyword('track')
 
         // Agrupar por nombre
         const agrupado = {}
-        datos.forEach(([nombre, descripcion, fecha, estado]) => {
-            if (!agrupado[nombre]) {
-                agrupado[nombre] = []
-            }
-            agrupado[nombre].push(`🟡 ➡️ ${descripcion} ➡️ ${fecha} ⏱️`)
+        datos.forEach(([nombre, descripcion, fecha, estado, , id]) => {
+            if (!agrupado[nombre]) agrupado[nombre] = []
+
+            agrupado[nombre].push({
+                estado,
+                descripcion,
+                fecha,
+                id
+            })
         })
 
-        // Crear mensajes para cada grupo
+        // Ordenar: primero los "🟢"
         for (const nombre in agrupado) {
-            const actividades = agrupado[nombre].join('\n')
-            const mensaje = `Actividades de ${nombre}\n${actividades}`
-            if (isMessageFromGroup) {
+            agrupado[nombre].sort((a, b) => {
+                if (a.estado === b.estado) return 0
+                return a.estado === '🟢' ? -1 : 1
+            })
+        }
+
+        if (isMessageFromGroup) {
+            for (const nombre in agrupado) {
+                const actividades = agrupado[nombre]
+                    .map(a => `${a.estado} ➡️ ${a.descripcion} ➡️ ${a.fecha} ⏱️`)
+                    .join('\n')
+
+                const mensaje = `Actividades de ${nombre}\n${actividades}`
                 await ctxFn.provider.sendText(process.env.WHATSAPP_GROUP_ID, mensaje)
-            } else {
-                await ctxFn.flowDynamic(mensaje)
             }
+        } else {
+            const nombreUsuario = ctx.pushName
+            const actividadesUsuario = agrupado[nombreUsuario]
+
+            if (!actividadesUsuario || actividadesUsuario.length === 0) {
+                return await ctxFn.flowDynamic('No encontré actividades registradas con tu nombre 😶')
+            }
+
+            const mensaje = `Actividades de ${nombreUsuario}\n` + actividadesUsuario
+                .map(a => `${a.estado} ➡️ ${a.descripcion} ➡️ ${a.fecha} ⏱️ | 🆔 ${a.id}`)
+                .join('\n')
+
+            await ctxFn.flowDynamic(mensaje)
         }
     })
+    .addAnswer([
+        'Recuerda que puedes realizar las siguientes operaciones con tus actividades 🧠',
+        '*Completar* ✅',
+        '*Eliminar* ❌'
+    ])
+
 
 
 const flowFraseAleatoria = addKeyword('frase')
@@ -273,7 +427,7 @@ const main = async () => {
         dbUri: process.env.MONGO_DB_URI,
         dbName: "MaruBot"
     })
-    const adapterFlow = createFlow([flowWelcome, flowMenu, flowTracker, flowTrackerRegistro, flowTrackerVer, flowFraseAleatoria, flowDatoCurioso, flowImagen, flowAudio, flowDescribirImagen, flowImagenATexto, flowSalir,])
+    const adapterFlow = createFlow([flowWelcome, flowMenu, flowTracker, flowTrackerRegistro, flowTrackerCompletar, flowTrackerCompletarActividad, flowTrackerEliminar, flowTrackerEliminarActividad, flowTrackerVer, flowFraseAleatoria, flowDatoCurioso, flowImagen, flowAudio, flowDescribirImagen, flowImagenATexto, flowSalir,])
     const adapterProvider = createProvider(BaileysProvider)
 
     createBot({
